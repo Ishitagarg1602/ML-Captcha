@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CAPTCHA ML Project</title>
+    <link rel="stylesheet" href="static/styles.css" />
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Machine Learning CAPTCHA for Real-time Behavior Assessment</h1>
+            <p class="authors">Produced by: Supreet Kaur, Ishita Garg</p>
+            <p class="course">Applied Machine Learning</p>
+        </header>
+
+        <section class="intro">
+            <h2>Intro</h2>
+            <p>Hi there</p>
+            <p>This is a sample website created to test our project. You will see a rough outline of the project moving forward.</p>
+            <p>We hope you like what we've done!</p>
+            <blockquote>"I have a friendly relationship with coding, but it's also like a friend I often want to beat up."<br><span>– Supreet Kaur</span></blockquote>
+            <blockquote>“AAAAAA THERE IS A BUG IN MY CODE!!!”<br><span>– Ishita Garg</span></blockquote>
+        </section>
+
+        <section class="problem">
+            <h2>Real World Problem Solving</h2>
+            <div class="keywords">
+                <span>Listen</span>
+                <span>Understand</span>
+                <span>Respond</span>
+                <span>Act</span>
+            </div>
+        </section>
+
+        <section class="goals">
+            <h2>Goals</h2>
+            <p>Develop AI-driven CAPTCHAs to combat the increasing sophistication of AI-based CAPTCHA solvers.</p>
+            <p>This will be achieved through the implementation of advanced techniques, specifically by using classical machine learning to differentiate between human and bot behavior. The project will focus on interpretable feature engineering and the
+                use of lightweight models.</p>
+        </section>
+
+        <section class="pipeline">
+            <h2>Pipeline Stages</h2>
+            <ol>
+                <li><strong>Data Acquisition and Preprocessing:</strong> Focus on capturing and analyzing mouse movements, typing dynamics, click patterns, scrolling behavior, and form interactions.</li>
+                <li><strong>Model Development and Training:</strong> Train selected models using the engineered features (tabular data). Implement scikit-learn pipelines to streamline the preprocessing and training steps.</li>
+                <li><strong>Model Training:</strong> Integrate opportunities into product development and improvement processes.</li>
+                <li><strong>Evaluation:</strong> Evaluate the model’s resilience against sophisticated bots by testing it with simulated bot behavior that incorporates randomized, yet human-like, features.</li>
+            </ol>
+        </section>
+
+        <section class="features">
+            <h2>Features</h2>
+            <ul>
+                <li>Mouse Dynamics Tracking – Captures speed, acceleration, and path curvature.</li>
+                <li>Typing Pattern Analysis – Measures keystroke intervals, error rates, and backspace use.</li>
+                <li>Click and Scroll Behavior – Analyzes click distribution and scroll jerkiness.</li>
+                <li>Session-Level Metrics – Tracks session duration and event counts.</li>
+                <li>Time-Series Aggregation – Extracts rolling stats and spectral patterns (e.g., FFT peaks).</li>
+                <li>Real-Time Data Capture – Uses JavaScript to log interaction events with timestamps.</li>
+            </ul>
+        </section>
+
+        <footer>
+            <h2>THANK YOU FOR VISITING!!!</h2>
+            <p>Feel free to connect with us:</p>
+            <ul class="links">
+                <li><a href="https://www.linkedin.com/in/supreet-kaur-82166b293/">Supreet Kaur</a></li>
+                <li><a href="https://www.linkedin.com/in/ishita-garg-53aa51289/">Ishita Garg</a></li>
+            </ul>
+        </footer>
+    </div>
+    <script src="static/behavioral-data-collector.js"></script>
+    <script>
+        // Initialize the behavior collector
+        const collector = new BehaviorCollector();
+
+        // Add form submission handler
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add a simple form to test the CAPTCHA
+            const formSection = document.createElement('section');
+            formSection.className = 'captcha-test';
+            formSection.innerHTML = `
+                    <h2>Test our CAPTCHA System</h2>
+                    <p>Interact naturally with this form. Our system will analyze your behavior.</p>
+                    <form id="captcha-form">
+                        <div class="form-group">
+                            <label for="name">Name:</label>
+                            <input type="text" id="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email:</label>
+                            <input type="email" id="email" required>
+                        </div>
+                        <button type="submit">Submit</button>
+                    </form>
+                    <div id="result" style="margin-top: 20px; display: none;"></div>
+                `;
+
+            document.querySelector('.container').insertBefore(
+                formSection,
+                document.querySelector('footer')
+            );
+
+            // Handle form submission
+            document.getElementById('captcha-form').addEventListener('submit', async(e) => {
+                e.preventDefault();
+
+                // Export collected behavioral data
+                const behavioralData = collector.exportData();
+
+                // Send data to backend for analysis
+                try {
+                    const response = await fetch('/api/captcha-data', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(behavioralData)
+                    });
+
+                    const result = await response.json();
+                    const resultDiv = document.getElementById('result');
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `<div class="alert">Verification ${result.status === 'success' ? 'complete' : 'failed'}!</div>`;
+
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
