@@ -1,10 +1,11 @@
-# feature_extraction.py
 import os
 import json
 import pandas as pd
 import numpy as np
 import argparse
 from math import sqrt
+from pathlib import Path
+from tqdm import tqdm  # For progress bar
 
 def calculate_features(mouse_movements):
     """
@@ -16,40 +17,41 @@ def calculate_features(mouse_movements):
     Returns:
         Dictionary of features
     """
+    # Default empty features dictionary
+    empty_features = {
+        'movement_count': 0,
+        'total_distance': 0,
+        'avg_speed': 0,
+        'std_speed': 0,
+        'max_speed': 0,
+        'avg_acceleration': 0,
+        'std_acceleration': 0,
+        'avg_curvature': 0,
+        'duration_ms': 0
+    }
+    
     # Convert string to list of dictionaries if needed
     if isinstance(mouse_movements, str):
         try:
             mouse_movements = json.loads(mouse_movements)
         except json.JSONDecodeError:
-            return {  # fallback if JSON is malformed
-                'movement_count': 0,
-                'total_distance': 0,
-                'avg_speed': 0,
-                'std_speed': 0,
-                'max_speed': 0,
-                'avg_acceleration': 0,
-                'std_acceleration': 0,
-                'avg_curvature': 0,
-                'duration_ms': 0
-            }
+            return empty_features
 
     # If empty or too short
     if not mouse_movements or len(mouse_movements) < 3:
-        return {
-            'movement_count': len(mouse_movements) if mouse_movements else 0,
-            'total_distance': 0,
-            'avg_speed': 0,
-            'std_speed': 0,
-            'max_speed': 0,
-            'avg_acceleration': 0,
-            'std_acceleration': 0,
-            'avg_curvature': 0,
-            'duration_ms': 0
-        }
+        empty_features['movement_count'] = len(mouse_movements) if mouse_movements else 0
+        return empty_features
 
     distances, speeds, accelerations, curvatures = [], [], [], []
+    
+    # Pre-allocate arrays for better performance
+    n_points = len(mouse_movements)
+    distances = np.zeros(n_points - 1)
+    speeds = np.zeros(n_points - 1)
+    accelerations = np.zeros(n_points - 2)
+    curvatures = np.zeros(n_points - 2)
 
-    for i in range(1, len(mouse_movements)):
+    for i in range(1, n_points):
         prev = mouse_movements[i - 1]
         curr = mouse_movements[i]
 
@@ -58,14 +60,12 @@ def calculate_features(mouse_movements):
         distance = sqrt(dx**2 + dy**2)
         time_diff = (curr['timestamp'] - prev['timestamp']) / 1000  # seconds
 
-        speed = distance / time_diff if time_diff > 0 else 0
-        distances.append(distance)
-        speeds.append(speed)
+        distances[i-1] = distance
+        speeds[i-1] = distance / time_diff if time_diff > 0 else 0
 
         # Acceleration
         if i > 1 and speeds[i - 2] > 0 and time_diff > 0:
-            acceleration = (speed - speeds[i - 2]) / time_diff
-            accelerations.append(acceleration)
+            accelerations[i-2] = (speeds[i-1] - speeds[i-2]) / time_diff
 
         # Curvature
         if i > 1:
@@ -81,20 +81,23 @@ def calculate_features(mouse_movements):
             if len1 > 0 and len2 > 0:
                 dot_product = (dx1 * dx2 + dy1 * dy2) / (len1 * len2)
                 dot_product = max(-1, min(1, dot_product))  # Clamp
-                curvature = abs(1 - dot_product)
-                curvatures.append(curvature)
+                curvatures[i-2] = abs(1 - dot_product)
 
     duration_ms = mouse_movements[-1]['timestamp'] - mouse_movements[0]['timestamp']
+    
+    # Filter out zeros/placeholders
+    accelerations = accelerations[accelerations != 0]
+    curvatures = curvatures[curvatures != 0]
 
     features = {
-        'movement_count': len(mouse_movements),
-        'total_distance': sum(distances),
-        'avg_speed': np.mean(speeds) if speeds else 0,
-        'std_speed': np.std(speeds) if speeds else 0,
-        'max_speed': max(speeds) if speeds else 0,
-        'avg_acceleration': np.mean(accelerations) if accelerations else 0,
-        'std_acceleration': np.std(accelerations) if accelerations else 0,
-        'avg_curvature': np.mean(curvatures) if curvatures else 0,
+        'movement_count': n_points,
+        'total_distance': np.sum(distances),
+        'avg_speed': np.mean(speeds) if len(speeds) > 0 else 0,
+        'std_speed': np.std(speeds) if len(speeds) > 0 else 0,
+        'max_speed': np.max(speeds) if len(speeds) > 0 else 0,
+        'avg_acceleration': np.mean(accelerations) if len(accelerations) > 0 else 0,
+        'std_acceleration': np.std(accelerations) if len(accelerations) > 0 else 0,
+        'avg_curvature': np.mean(curvatures) if len(curvatures) > 0 else 0,
         'duration_ms': duration_ms
     }
 
@@ -107,38 +110,55 @@ def process_dataset(input_file, output_file):
     Args:
         input_file: Path to the input CSV file with raw data
         output_file: Path to save the processed features
+        
+    Returns:
+        DataFrame with extracted features
     """
     print(f"Loading raw data from {input_file}...")
-    df = pd.read_csv(input_file)
+    
+    try:
+        df = pd.read_csv(input_file)
+    except Exception as e:
+        print(f"Error loading dataset: {str(e)}")
+        return None
 
     print(f"Found {len(df)} records")
     print(f"Columns: {df.columns.tolist()}")
 
     # Detect mouse movement column
-    mouse_column = next((col for col in df.columns if 'mouse' in col.lower()), None)
-    if not mouse_column:
+    mouse_columns = [col for col in df.columns if 'mouse' in col.lower()]
+    if not mouse_columns:
         print("Error: No column containing mouse movement data found.")
-        return
-
+        return None
+    
+    mouse_column = mouse_columns[0]
     print(f"Extracting features from column: {mouse_column}...")
 
     features_list = []
-    for idx, row in df.iterrows():
-        mouse_data = row[mouse_column]
-        features = calculate_features(mouse_data)
+    
+    # Use tqdm for progress bar
+    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Extracting features"):
+        try:
+            mouse_data = row[mouse_column]
+            features = calculate_features(mouse_data)
+            
+            # Preserve all other columns as metadata
+            for col in df.columns:
+                if col != mouse_column:
+                    features[col] = row[col]
+                    
+            features_list.append(features)
+        except Exception as e:
+            print(f"Error processing row {idx}: {str(e)}")
 
-        # Add label if exists
-        label = row.get('label', row.get('is_bot', None))
-        if label is not None:
-            features['label'] = label
-
-        features_list.append(features)
-
-        if (idx + 1) % 100 == 0 or idx == len(df) - 1:
-            print(f"Processed {idx + 1} / {len(df)}")
-
+    if not features_list:
+        print("Error: No features were extracted.")
+        return None
+        
     features_df = pd.DataFrame(features_list)
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    # Create output directory if it doesn't exist
+    Path(os.path.dirname(output_file)).mkdir(parents=True, exist_ok=True)
     features_df.to_csv(output_file, index=False)
 
     print(f"Features saved to {output_file}")
