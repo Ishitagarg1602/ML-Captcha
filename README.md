@@ -6,3 +6,5 @@ run app.py
 
 then
  data processing → feature extraction → data augmentation → model training.
+
+I am Ishita garg 
