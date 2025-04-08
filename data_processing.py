@@ -35,7 +35,11 @@ def create_dataset():
     
     # Convert to DataFrame
     df = pd.DataFrame(all_data)
-    
+
+    # Stringify the 'mouse_movements' column if it exists
+    if 'mouse_movements' in df.columns:
+        df['mouse_movements'] = df['mouse_movements'].apply(json.dumps)
+
     # Save to CSV
     df.to_csv(os.path.join(processed_directory, 'dataset.csv'), index=False)
     print(f"Created dataset with {len(df)} records")
